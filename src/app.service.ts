@@ -7,11 +7,16 @@ export class AppService {
   private bot: Telegraf;
 
   constructor() {
-    this.bot = new Telegraf(process.env.TELEGRAM_API_KEY);
+    const telegramApiKey = process.env.TELEGRAM_API_KEY;
+    if (!telegramApiKey) {
+      throw new Error('TELEGRAM_API_KEY is not set');
+    }
+
+    this.bot = new Telegraf(telegramApiKey);
 
     this.bot.start((ctx) =>
       ctx.reply(
-        'Welcome to ChooseCheap Bot! Use /search <product> to compare prices and /subscribe <product> <price> to get notified when the price drops.',
+        'Welcome to ChooseCheap Bot! Use /search <product> to get the best price.',
       ),
     );
     this.bot.command('search', (ctx) => this.handleSearch(ctx));
@@ -26,10 +31,22 @@ export class AppService {
       return ctx.reply('Please provide a product name.');
     }
 
-    const response = await axios.get('http://localhost:3003/compare', {
-      params: { product: productName },
-    });
+    try {
+      const response = await axios.get('http://localhost:8000/compare', {
+        params: { product: productName },
+      });
+      const comparison = response.data;
 
-    ctx.reply(response.data);
+      const amazon = comparison.amazon;
+      const mercadoLibre = comparison.mercadoLibre;
+
+      ctx.reply(
+        `Amazon:\nNombre: ${amazon.Nombre}\nDescripción: ${amazon.Descripción}\nPrecio: ${amazon.Precio}\nImagen: ${amazon.Imagen}\nURL: ${amazon.URL}\n\n` +
+          `Mercado Libre:\nNombre: ${mercadoLibre.Nombre}\nDescripción: ${mercadoLibre.Descripción}\nPrecio: ${mercadoLibre.Precio}\nImagen: ${mercadoLibre.Imagen}\nURL: ${mercadoLibre.URL}`,
+      );
+    } catch (error) {
+      console.error('Error comparing prices:', error);
+      ctx.reply('Failed to compare prices. Please try again later.');
+    }
   }
 }
